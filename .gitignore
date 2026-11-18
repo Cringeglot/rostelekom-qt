@@ -1,5 +1,5 @@
-build*
-*.pro.user*
-.qmake.stash
-*.exe
-*.o
+build/
+.vscode/
+*.db
+*.db-journal
+*.user
