@@ -33,13 +33,13 @@ public:
     QSqlDatabase getDatabase() const;
 
     static QString shapeTypeToString(ShapeType type);
-    static ShapeType stringToSHapeType(QString& string);
+    static ShapeType stringToShapeType(QString& string);
 
 
 
 private:
-    QList<int >fromStringToList(const QString& string) const ;
-    QString fromListToString(const QList<int> list) const;
+    QString formatConnectionsList(const QList<int>& ids) const;
+    QList<int> parseConnectionsString(const QString& str) const;
 
     bool recalculateTypeCounts();
 

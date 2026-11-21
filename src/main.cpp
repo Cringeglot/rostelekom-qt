@@ -17,7 +17,13 @@ int main(int argc, char* argv[]){
     int id2 = db.addPrimitive(ShapeType::Ellipse);
     int id3 = db.addPrimitive(ShapeType::Rectangle);
 
+    db.addConnection(id1, id2);
+    db.addConnection(id2, id3);
+
     qDebug() << "Созданы ID:" << id1 << id2 << id3;
+    qDebug() << "Созданы связи:" << id2 << ": "<< db.getConnections(id2);
+
+    db.removePrimitive(id2);
 
     QSqlQuery q("SELECT id, shape_type, connected_ids, type_count FROM primitives");
     while (q.next()) {
