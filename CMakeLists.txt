@@ -16,6 +16,8 @@ add_executable(PrimitivesApp
     src/main.cpp
     src/db/DatabaseManager.h
     src/db/DatabaseManager.cpp
+    src/ui/MainWindow.h
+    src/ui/MainWindow.cpp
 )
 
 target_include_directories(PrimitivesApp PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
