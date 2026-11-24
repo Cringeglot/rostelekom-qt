@@ -1,11 +1,9 @@
 #include "MainWindow.h"
 
 
-
-
 MainWindow:: MainWindow(QWidget* parent): QMainWindow(parent){
     setWindowTitle("Графическое приложения для создание прмиитивов");
-    resize(1200, 680);
+    resize(1250, 720);
 
     if(!m_db.initialize("primitives.db")){
         QMessageBox::critical(this, "Ошибка", "Не удалось подключится к базе данных" );
@@ -19,15 +17,68 @@ MainWindow:: MainWindow(QWidget* parent): QMainWindow(parent){
     //разделяю экран на пополам: слева сцена с графикой, справа фильтры
     QSplitter* splitter = new QSplitter(Qt::Horizontal, this);
 
-    //Левая часть: графическая сцена
-    m_scene = new QGraphicsScene(this);
-    m_scene -> setSceneRect(0, 0, 600, 600);
+    //Левая часть: графическая сцена + панель создания фигур
+    auto* leftPanel = new QWidget(this);
+    auto* leftLayout = new QVBoxLayout(leftPanel);
 
+    auto* createGroup = new QGroupBox("Добавление примитива", this);
+    auto* createLayout = new QHBoxLayout(createGroup);
+
+    m_createTypeCombo = new QComboBox(this);
+    m_createTypeCombo->addItem(DatabaseManager::shapeTypeToString(ShapeType::Ellipse), static_cast<int>(ShapeType::Ellipse));
+    m_createTypeCombo->addItem(DatabaseManager::shapeTypeToString(ShapeType::Rectangle), static_cast<int>(ShapeType::Rectangle));
+    m_createTypeCombo->addItem(DatabaseManager::shapeTypeToString(ShapeType::Polygon), static_cast<int>(ShapeType::Polygon));
+
+    m_widthSpin = new QSpinBox(this);
+    m_widthSpin->setRange(30, 300);
+    m_widthSpin->setValue(90);
+
+    m_heightSpin = new QSpinBox(this);
+    m_heightSpin->setRange(30, 300);
+    m_heightSpin->setValue(60);
+
+    m_sidesSpin = new QSpinBox(this);
+    m_sidesSpin->setRange(3, 20);
+    m_sidesSpin->setValue(5);
+    m_sidesSpin->setEnabled(false);
+
+    m_addBtn = new QPushButton("Добавить на сцену", this);
+
+    createLayout->addWidget(new QLabel("Форма:", this));
+    createLayout->addWidget(m_createTypeCombo);
+    createLayout->addWidget(new QLabel("Ширина:", this));
+    createLayout->addWidget(m_widthSpin);
+    createLayout->addWidget(new QLabel("Высота:", this));
+    createLayout->addWidget(m_heightSpin);
+    createLayout->addWidget(new QLabel("Вершин:", this));
+    createLayout->addWidget(m_sidesSpin);
+    createLayout->addWidget(m_addBtn);
+
+    leftLayout->addWidget(createGroup);
+
+    // Панель режима сцены
+    auto* modeGroup = new QGroupBox("Режим работы со сценой", this);
+    auto* modeLayout = new QHBoxLayout(modeGroup);
+
+    m_moveModeRadio = new QRadioButton("Перемещение фигур", this);
+    m_connectModeRadio = new QRadioButton("Создание связей (потяните линию от фигуры к фигуре)", this);
+    m_moveModeRadio->setChecked(true);
+
+    modeLayout->addWidget(m_moveModeRadio);
+    modeLayout->addWidget(m_connectModeRadio);
+    modeLayout->addStretch();
+
+    leftLayout->addWidget(modeGroup);
+
+    // Сама графическая сцена
+    m_scene = new GraphicsScene(this);
     m_graphicsView = new QGraphicsView(m_scene, this);
-    m_graphicsView->setRenderHint(QPainter:: Antialiasing);
+    m_graphicsView->setRenderHint(QPainter::Antialiasing);
+    leftLayout->addWidget(m_graphicsView);
 
-    
-    splitter->addWidget(m_graphicsView);
+    splitter->addWidget(leftPanel);
+
+
 
     //Правая часть: фильтры, таблица и управление 
     QWidget* rightPanel = new QWidget(this);
@@ -80,25 +131,29 @@ MainWindow:: MainWindow(QWidget* parent): QMainWindow(parent){
 
     //Кнокпи управления в правой части
     QHBoxLayout* actionsLayout = new QHBoxLayout();
-    m_testAddBtn = new QPushButton("Tect: добавить фигуру в бд", this);
-    m_deleteBtn = new QPushButton("Удалить выбранную фигуру", this);
+    m_deleteBtn = new QPushButton("Удалить выбранную фигуру (и её связи)", this);
 
-    actionsLayout->addWidget(m_testAddBtn);
     actionsLayout->addStretch();
     actionsLayout->addWidget(m_deleteBtn);
-
     rightLayout->addLayout(actionsLayout);
 
+
     //Сигналы и слоты
+    connect(m_createTypeCombo, QOverload<int>::of(&QComboBox::currentIndexChanged),
+            this, &MainWindow::onShapeSelectionChanged);
+    connect(m_addBtn, &QPushButton::clicked, this, &MainWindow::onAddPrimitiveClicked);
+
+    connect(m_moveModeRadio, &QRadioButton::toggled, this, &MainWindow::onModeChanged);
+    connect(m_connectModeRadio, &QRadioButton::toggled, this, &MainWindow::onModeChanged);
+    connect(m_scene, &GraphicsScene::connectionCreated,
+            this, &MainWindow::onConnectionCreated);
     connect(m_filterIdEdit, &QLineEdit::textChanged, this, &MainWindow::applyFilters);
     connect(m_filterTypeCombo, QOverload<int>::of(&QComboBox::currentIndexChanged),
             this, &MainWindow::applyFilters);
     connect(m_filterCountSpin, QOverload<int>::of(&QSpinBox::valueChanged),
             this, &MainWindow::applyFilters);
     connect(m_resetFilterBtn, &QPushButton::clicked, this, &MainWindow::resetFilters);
-
     connect(m_deleteBtn, &QPushButton::clicked, this, &MainWindow::onDeleteSelectedClicked);
-    connect(m_testAddBtn, &QPushButton::clicked, this, &MainWindow::onTestAddClicked);
 
 
 
@@ -106,6 +161,7 @@ MainWindow:: MainWindow(QWidget* parent): QMainWindow(parent){
     //загрузка данных из бд в таблицу
     m_model = new QSqlTableModel(this, m_db.getDatabase());
     m_model->setTable("primitives");
+    m_model->setEditStrategy(QSqlTableModel::OnManualSubmit);
 
     m_model->setHeaderData(0, Qt::Horizontal, "ID");
     m_model->setHeaderData(1, Qt::Horizontal, "Тип фигуры");
@@ -175,16 +231,24 @@ void MainWindow::resetFilters()
 
 void MainWindow::onDeleteSelectedClicked()
 {
+int idToDelete = -1;
+
     const QModelIndex current = m_tableView->currentIndex();
-    if (!current.isValid()) {
-        QMessageBox::information(this, "Удаление", "Выберите строку в таблице для удаления.");
+    if (current.isValid()) {
+        idToDelete = m_model->data(m_model->index(current.row(), 0)).toInt();
+    } else if (!m_scene->selectedItems().isEmpty()) {
+        if (PrimitiveItem* prim = dynamic_cast<PrimitiveItem*>(m_scene->selectedItems().first())) {
+            idToDelete = prim->id();
+        }
+    }
+
+    if (idToDelete <= 0) {
+        QMessageBox::information(this, "Удаление", "Выберите фигуру в таблице (или на сцене) для удаления.");
         return;
     }
 
-    int row = current.row();
-    int id = m_model->data(m_model->index(row, 0)).toInt();
-
-    if (m_db.removePrimitive(id)) {
+    if (m_db.removePrimitive(idToDelete)) {
+        m_scene->removePrimitiveById(idToDelete);
         m_model->select();
     } else {
         QMessageBox::warning(this, "Ошибка", "Не удалось удалить фигуру из базы данных.");
@@ -193,10 +257,45 @@ void MainWindow::onDeleteSelectedClicked()
 
 
 
-void MainWindow::onTestAddClicked()
+void MainWindow::onShapeSelectionChanged(int index)
 {
-    int r = QRandomGenerator::global()->bounded(3);
-    ShapeType type = static_cast<ShapeType>(r);
-    m_db.addPrimitive(type);
+    Q_UNUSED(index);
+    ShapeType type = static_cast<ShapeType>(m_createTypeCombo->currentData().toInt());
+    m_sidesSpin->setEnabled(type == ShapeType::Polygon);
+}
+
+void MainWindow::onModeChanged()
+{
+    if (m_connectModeRadio->isChecked()) {
+        m_scene->setMode(GraphicsScene::Mode::Connect);
+    } else {
+        m_scene->setMode(GraphicsScene::Mode::Move);
+    }
+}
+
+void MainWindow::onAddPrimitiveClicked()
+{
+    ShapeType type = static_cast<ShapeType>(m_createTypeCombo->currentData().toInt());
+    int width = m_widthSpin->value();
+    int height = m_heightSpin->value();
+    int sides = m_sidesSpin->value();
+
+    int newId = m_db.addPrimitive(type);
+    if (newId <= 0) {
+        QMessageBox::warning(this, "Ошибка", "Не удалось добавить фигуру в БД.");
+        return;
+    }
+
+    qreal x = QRandomGenerator::global()->bounded(80, 520);
+    qreal y = QRandomGenerator::global()->bounded(80, 440);
+
+    m_scene->addPrimitiveItem(newId, type, width, height, QPointF(x, y), sides);
     m_model->select();
+}
+
+void MainWindow::onConnectionCreated(int id1, int id2)
+{
+    if (m_db.addConnection(id1, id2)) {
+        m_model->select();
+    }
 }
