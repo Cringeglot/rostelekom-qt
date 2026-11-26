@@ -1,5 +1,8 @@
 build/
+build-release/
+PrimitivesApp_Release/
 .vscode/
 *.db
 *.db-journal
 *.user
+*.zip
