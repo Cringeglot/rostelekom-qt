@@ -77,6 +77,9 @@ class PolygonPrimitive : public PrimitiveItem
 public:
     PolygonPrimitive(int id, qreal width, qreal height, int sides = 6, QGraphicsItem* parent = nullptr);
     QPainterPath shape() const override;
+    int sides(){
+        return m_sides;
+    }
 
 protected:
     void drawGeometry(QPainter* painter) const override;

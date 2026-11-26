@@ -1,4 +1,5 @@
 #include "MainWindow.h"
+#include "scene/ConnectionLine.h"
 
 
 MainWindow:: MainWindow(QWidget* parent): QMainWindow(parent){
@@ -170,8 +171,27 @@ MainWindow:: MainWindow(QWidget* parent): QMainWindow(parent){
 
     m_model->select();
     m_tableView->setModel(m_model);
+    m_tableView->setItemDelegateForColumn(3, new ShapeCountDelegate(m_scene, this));
     m_tableView->resizeColumnsToContents();
 
+
+
+    // Восстанавливаем фигуры и связи из БД
+    const QList<PrimitiveGeometry> saved = m_db.loadAllPrimitives();
+    for (const auto& g : saved) {
+        m_scene->addPrimitiveItem(g.id, g.type, g.width, g.height, QPointF(g.x, g.y), g.sides);
+    }
+    for (const auto& g : saved) {
+        PrimitiveItem* start = m_scene->findPrimitiveById(g.id);
+        for (int targetId : g.connections) {
+            if (g.id < targetId && !m_scene->hasConnection(g.id, targetId)) {
+                PrimitiveItem* end = m_scene->findPrimitiveById(targetId);
+                if (start && end) {
+                    m_scene->addItem(new ConnectionLine(start, end));
+                }
+            }
+        }
+    }
 }
 
 
@@ -290,6 +310,7 @@ void MainWindow::onAddPrimitiveClicked()
     qreal y = QRandomGenerator::global()->bounded(80, 440);
 
     m_scene->addPrimitiveItem(newId, type, width, height, QPointF(x, y), sides);
+    m_db.saveGeometry(newId, x, y, width, height, sides);
     m_model->select();
 }
 

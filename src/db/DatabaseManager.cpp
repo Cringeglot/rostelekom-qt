@@ -7,6 +7,7 @@
 #include <algorithm>
 
 
+
 DatabaseManager::  DatabaseManager(QObject* parent): QObject(parent){}
 
 DatabaseManager:: ~DatabaseManager(){
@@ -33,11 +34,27 @@ bool DatabaseManager::initialize(const QString& dbPath){
             type_count INTEGER DEFAULT 0
         )
     )";
-
     if(!query.exec(sqlquery)){
         qCritical() << "Error creating table " << query.lastError().text();
         return false;
     }
+
+
+    const QString geomSql = R"(
+        CREATE TABLE IF NOT EXISTS primitive_geometry (
+            id INTEGER PRIMARY KEY,
+            x REAL NOT NULL,
+            y REAL NOT NULL,
+            width REAL NOT NULL,
+            height REAL NOT NULL,
+            sides INTEGER DEFAULT 6
+        )
+    )";
+    if(!query.exec(geomSql)){
+        qCritical() << "Ошибка создания таблицы геометрии:" << query.lastError().text();
+        return false;        
+    }
+
 
     return true;
 
@@ -97,7 +114,7 @@ bool DatabaseManager:: recalculateTypeCounts(){
     return true;
 }
 
-QString DatabaseManager:: shapeTypeToString(ShapeType type){
+QString DatabaseManager:: shapeTypeToString(const ShapeType type){
     switch(type){
         case ShapeType::Ellipse: return "Эллипс";
         case ShapeType::Rectangle: return "Прямоугольник";
@@ -107,7 +124,7 @@ QString DatabaseManager:: shapeTypeToString(ShapeType type){
 
 }
 
-ShapeType DatabaseManager::stringToShapeType(QString& string){
+ShapeType DatabaseManager::stringToShapeType(const QString& string){
     if(string == "Эллипс") return ShapeType:: Ellipse;
     else if( string == "Прямоугольник") return ShapeType:: Rectangle;
     return ShapeType::Polygon;
@@ -197,6 +214,15 @@ bool DatabaseManager:: removePrimitive(int id){
         return false;
     }
 
+    QSqlQuery delGeom(m_db);
+    delGeom.prepare("DELETE FROM primitive_geometry WHERE id = :correctid");
+    delGeom.bindValue(":correctid", id);
+    if (!delGeom.exec()) {
+        qCritical() << "Error delete primitive geometry:" << delGeom.lastError().text();
+        m_db.rollback();
+        return false;
+    }
+
 
 //пересчитываем связи(минус фигура минус количество свзяей с другими)
 QSqlQuery selectquery(m_db);
@@ -207,14 +233,14 @@ if(!selectquery.exec("SELECT id, connected_ids FROM primitives WHERE connected_i
 }
 
 while(selectquery.next()){
-    int id = selectquery.value(0).toInt();
+    int rowid = selectquery.value(0).toInt();
     QList<int> connects = parseConnectionsString(selectquery.value(1).toString());
 
     if(connects.removeAll(id)>0){
         QSqlQuery newquery(m_db);
         newquery.prepare("UPDATE primitives SET connected_ids = :corcon WHERE id = :corid");
         newquery.bindValue(":corcon", formatConnectionsList(connects));
-        newquery.bindValue(":corid", id);
+        newquery.bindValue(":corid", rowid);
         if(!newquery.exec()){
             qCritical() << "Error connect clear" << newquery.lastError().text();
             m_db.rollback();
@@ -232,4 +258,48 @@ if(!recalculateTypeCounts()){
 m_db.commit();
 return true;
 
+}
+
+
+bool DatabaseManager::saveGeometry(int id, qreal x, qreal y, qreal width, qreal height, int sides){
+    QSqlQuery q(m_db);
+    q.prepare("INSERT OR REPLACE INTO primitive_geometry (id, x, y, width, height, sides) VALUES (:id, :x, :y, :w, :h, :s)");
+
+    q.bindValue(":id", id);
+    q.bindValue(":x", x);
+    q.bindValue(":y", y);
+    q.bindValue(":w", width);
+    q.bindValue(":h", height);
+    q.bindValue(":s", sides);
+
+    return q.exec();
+}
+
+
+QList<PrimitiveGeometry> DatabaseManager:: loadAllPrimitives() const {
+     QList<PrimitiveGeometry> list;
+    QSqlQuery q(m_db);
+    const QString sql = R"(
+        SELECT p.id, p.shape_type, p.connected_ids,
+               COALESCE(g.x, 150), COALESCE(g.y, 150),
+               COALESCE(g.width, 90), COALESCE(g.height, 60),
+               COALESCE(g.sides, 6)
+        FROM primitives p
+        LEFT JOIN primitive_geometry g ON p.id = g.id
+    )";
+    if (!q.exec(sql)) return list;
+
+    while (q.next()) {
+        PrimitiveGeometry item;
+        item.id = q.value(0).toInt();
+        item.type = stringToShapeType(q.value(1).toString());
+        item.connections = parseConnectionsString(q.value(2).toString());
+        item.x = q.value(3).toReal();
+        item.y = q.value(4).toReal();
+        item.width = q.value(5).toReal();
+        item.height = q.value(6).toReal();
+        item.sides = q.value(7).toInt();
+        list.append(item);
+    }
+    return list;
 }

@@ -4,6 +4,7 @@
 #include "db/DatabaseManager.h"
 #include "scene/GraphicsScene.h"
 #include "scene/PrimitiveItem.h"
+#include "ShapeCountDelegate.h"
 
 #include <QMainWindow>
 #include <QSqlTableModel>

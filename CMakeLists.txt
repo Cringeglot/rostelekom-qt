@@ -18,6 +18,8 @@ add_executable(PrimitivesApp
     src/db/DatabaseManager.cpp
     src/ui/MainWindow.h
     src/ui/MainWindow.cpp
+    src/ui/ShapeCountDelegate.h
+    src/ui/ShapeCountDelegate.cpp
     src/scene/PrimitiveItem.h
     src/scene/PrimitiveItem.cpp
     src/scene/ConnectionLine.h

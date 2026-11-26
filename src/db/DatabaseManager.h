@@ -12,6 +12,17 @@ enum class ShapeType{
     Polygon
 };
 
+struct PrimitiveGeometry {
+    int id = -1;
+    ShapeType type = ShapeType::Rectangle;
+    qreal x = 100.0;
+    qreal y = 100.0;
+    qreal width = 90.0;
+    qreal height = 60.0;
+    int sides = 6;
+    QList<int> connections;
+};
+
 
 class DatabaseManager: public QObject{
     Q_OBJECT
@@ -32,8 +43,12 @@ public:
 
     QSqlDatabase getDatabase() const;
 
-    static QString shapeTypeToString(ShapeType type);
-    static ShapeType stringToShapeType(QString& string);
+    static QString shapeTypeToString(const ShapeType type);
+    static ShapeType stringToShapeType(const QString& string);
+
+
+    bool saveGeometry(int id, qreal x, qreal y, qreal width, qreal height, int sides);
+    QList<PrimitiveGeometry> loadAllPrimitives() const;
 
 
 
